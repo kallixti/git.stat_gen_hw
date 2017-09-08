@@ -1,0 +1,264 @@
+---
+title: "HW02 - Stratification and HWE"
+author: "Nicole L. Durant"
+date: "September 2, 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r swd, install packages, load libraries and data, echo=FALSE, message=FALSE}
+# install.packages("tidyverse")
+library(tidyverse)
+setwd("~/Desktop/Fall 2017/r_SP17/stat_gen_hw")
+
+df.strat_freq <- read.table("~/Desktop/Fall 2017/r_SP17/stat_gen_hw/data/freq_stat.frq.strat.csv", 
+    sep = "", header = TRUE)
+df.freq <- read.table("~/Desktop/Fall 2017/r_SP17/stat_gen_hw/data/freq_stat.frq.csv", 
+    sep = "", header = TRUE)
+
+head(df.freq)
+head(df.strat_freq)
+```
+
+## Summary Statistics: Allele Frequencies (Intro)
+
+Using the --freq command in PLINK, this provided a data set by which the minor allele frequencies (MAF) were calculated for each SNP. Note that this data set also provided allele codes for each SNP (A = 1, A = 2). Note that when A = 1, this is (usually) the minor allele. When A = 2, this would be the major allele. 
+MAF is the frequency of allele 1 (minor)
+NCHROBS is the number of allele observations.
+MAC is the count of allele 1 in the cluster. 
+
+We were able to stratify the data as well, by Chinese and Japanese individuals. This means that the data now records each SNP twice with a CLST variable assigned as either 1 (Chinese) or 2 (Japanese). To summarize these stats, we will look at the aggregate Asian population and look at the stratified data. 
+
+### Aggregate MAF
+```{r aggretate plots, echo = FALSE}
+# ggplot(df.freq, aes(SNP, MAF)) + geom_bar(stat = "identity")
+# http://www.sthda.com/english/wiki/ggplot2-histogram-plot-quick-start-guide-r-software-and-data-visualization
+ggplot(df.freq, aes(x = MAF)) + geom_histogram(aes(y = ..density..), bins = 20, color = "darkblue", fill = "lightblue") + geom_density() + 
+  labs(title="Aggregate MAF", x = "Minor Allele Frequency", y = "Distribution")
+
+ggplot(df.freq, aes(x = MAF)) + geom_histogram(aes(y = ..density..), color = "darkblue", fill = "lightblue") + geom_density() + 
+  labs(title="Aggregate MAF", x = "Minor Allele Frequency", y = "Distribution")
+```
+
+
+### Chinese MAF
+```{r Chinese plots, echo = FALSE}
+df.strat_freq %>%
+  filter(CLST == 1) %>%
+  ggplot(aes(x = MAF)) + 
+  geom_histogram(aes(y = ..density..), bins = 20, color = "darkblue", fill = "lightblue") +
+  geom_density() +
+  labs(title="Sratified: Chinese MAF", x = "Minor Allele Frequency", y = "Distribution")
+
+df.strat_freq %>%
+  filter(CLST == 1) %>%
+  summarise(mafmean = mean(MAF))
+
+```
+
+
+### Japanese MAF
+```{r Japanese plots, echo = FALSE}
+df.strat_freq %>%
+  filter(CLST == 2) %>%
+  ggplot(aes(x = MAF)) + 
+  geom_histogram(aes(y = ..density..), bins = 20, color = "darkblue", fill = "lightblue") +    geom_density() +
+  labs(title="Stratified: Japanese MAF, 0.01 bin", x = "Minor Allele Frequency", y = "Distribution")
+```
+Note that the distribution appears to be the same regardless of stratification. 
+
+We will use the non-stratified (aggregate) data set to look at the distribution of MAF broken down into three categories.
+
+## MAF<0.01
+```{r MAF<0.01, echo = FALSE}
+df.freq %>%
+  filter(MAF < 0.01) %>%
+  ggplot(aes(x = MAF)) + 
+  geom_histogram(aes(y = ..density..), bins = 20, color = "darkblue", fill = "lightblue") +
+  geom_density() +
+  labs(title="Rare MAF", x = "Minor Allele Frequency", y = "Distribution")
+
+```
+
+The histogram doesn't say much, and the distribution is healvily skewed since most individuals in this data set have an MAF of 0.
+
+It would be interesting to zoom in on the small MAF region between 0.005 and 0.006. If we remove those instances where MAF = 0 and look at this graphically, we come up with the following:
+
+```{r zoom in on rare MAF}
+df.freq %>%
+  filter(MAF < 0.006 & MAF > 0.003) %>%
+  ggplot(aes(x = MAF)) + 
+  geom_histogram(aes(y = ..density..), bins = 20, color = "darkblue", fill = "lightblue") +
+  geom_density() +
+  labs(title="Rare MAF, zoomed in", x = "Minor Allele Frequency", y = "Distribution")
+
+```
+
+## 0.01 \leq MAF \leq 0.05
+```{r Uncommon MAF, echo = FALSE}
+#df.freq %>%
+  #filter(MAF >= 0.01 & MAF <= 0.05) %>%
+  #ggplot(aes(x = MAF)) + 
+  #geom_histogram(aes(y = ..density..), bins = 10, color = "darkblue", fill = "lightblue") +
+  #geom_density() +
+  #labs(title="Uncommon MAF", x = "Minor Allele Frequency", y = "Distribution")
+
+df.freq %>%
+  filter(MAF >= 0.01 & MAF <= 0.05) %>%
+  ggplot(aes(x = MAF)) + 
+  geom_histogram(bins = 10, color = "darkblue", fill = "lightblue") +
+  labs(title="Uncommon MAFs", x = "Minor Allele Frequency", y = "Distribution")
+```
+
+## MAF > 0.05
+```{r Common MAF, echo = FALSE}
+df.freq %>%
+  filter(MAF > 0.05) %>%
+  ggplot(aes(x = MAF)) + 
+  geom_histogram(bins = 30, color = "darkblue", fill = "lightblue") +
+  labs(title="Common MAFs", x = "Minor Allele Frequency", y = "Distribution")
+```
+
+## HWE tests
+
+We will complete a HWE test on the aggregate data, and both stratified samples.
+
+### Aggregate Data
+```{r aggregate calculation}
+df.hwe.all <- read.table("~/Desktop/Fall 2017/r_SP17/stat_gen_hw/data/hapmap1_hwestats.hwe.csv", 
+    sep = "", header = TRUE)
+```
+
+### Chinese Sample
+```{r Chinese calculation}
+df.hwe.chinese <- read.table("~/Desktop/Fall 2017/r_SP17/stat_gen_hw/data/hapmap1_hwestats_Chinese.hwe.csv", 
+    sep = "", header = TRUE)
+```
+
+### Japanese Sample
+```{r Japanese calculation}
+df.hwe.japanese <- read.table("~/Desktop/Fall 2017/r_SP17/stat_gen_hw/data/hapmap1_hwestats_Japanese.hwe.csv", 
+    sep = "", header = TRUE)
+```
+
+```{r summaries for all three samples for MAF}
+summary(df.freq$MAF)
+
+df.chinese <- df.strat_freq %>%
+  filter(CLST == 1)
+  
+df.japanese <- df.strat_freq %>%
+  filter(CLST == 2)
+
+summary(df.chinese$MAF)
+summary(df.japanese$MAF)
+
+```
+
+```{r some hardy things}
+df.hwe.all %>%
+  filter(TEST == 'AFF', P>0.05)
+
+df.hwe.all %>%
+  filter(TEST == 'AFF', P<=0.05)
+
+```
+
+Or we can just run the --hardy code in PLINK. 
+
+## Question 2 from L&L Text
+Assume you observe that the proportion of a population affected with sickle cell anemia is 0.01. Assuming an autosomal recessive disease model and HWE, estimate the frequency of the sickle cell mutation at the hemoglobin locus in this population.
+
+To estimate the frequency of the sickle cell mutation, we need to figure out the proportion of the population that have the heterozygous genotype (note that we were given the proportion of the population with the homozygous recessive genotype). 
+
+We were told that sickle cell anemia is an autosomal recessive disease model, and that the proportion of the population affected was 0.01. If we think about the HW equation:
+
+p^2 + 2p(1-p) + (1-p)^2, 
+
+then this frequency would represent the homozygous recessive genotype: (1-p)^2.
+
+```{r headers for hwe data}
+head(df.hwe.all)
+head(df.hwe.chinese)
+head(df.hwe.japanese)
+```
+
+```{r things}
+check.all.df <- df.hwe.all %>%
+  filter(TEST == 'ALL')
+check.aff.df <- df.hwe.all %>%
+  filter(TEST == 'AFF')
+check.unaff.df <- df.hwe.all %>%
+  filter(TEST == 'UNAFF')
+
+df.hwe.japanese %>%
+  filter(TEST == 'ALL') %>%
+  ggplot(aes(x = P)) + 
+  geom_histogram(bins = 30, color = "darkblue", fill = "lightblue") +
+  labs(title="Case/Control (ALL) for Japanese Sample", x = "P-Value", 
+       y = "Distribution")
+
+df.hwe.japanese %>%
+  filter(TEST == 'AFF') %>%
+  ggplot(aes(x = P)) + 
+  geom_histogram(bins = 30, color = "darkblue", fill = "lightblue") +
+  labs(title="Case (AFF) for Japanese Sample", x = "P-Value", 
+       y = "Distribution")
+
+df.hwe.all %>%
+  ggplot(aes(x = P)) + 
+  geom_histogram(bins = 30, color = "darkblue", fill = "lightblue") +
+  labs(title="Complete Aggregate HWE", x = "P-Value", 
+       y = "Distribution")
+```
+
+```{r gonna check and cross ref the pvalues with the data...}
+df.combo <- select(df.freq, SNP, MAF)
+df.allp <- select(df.hwe.all, TEST, SNP, P) %>%
+  filter(TEST == 'UNAFF') 
+df.chip <- select(df.hwe.all, TEST, SNP, P) %>%
+  filter(TEST == 'UNAFF') 
+df.japp <- select(df.hwe.all, TEST, SNP, P) %>%
+  filter(TEST == 'UNAFF') 
+
+df.1 <- left_join(df.combo, df.allp, by = "SNP")
+df.2 <- left_join(df.combo, df.chip, by = "SNP")
+df.3 <- left_join(df.combo, df.japp, by = "SNP")
+
+# now let's try to graph??
+ggplot(df.1, aes(MAF, P)) + geom_point() + geom_smooth() 
+
+df.1 %>%
+  filter(P < 1) %>%
+  ggplot(aes(x = MAF, y = P)) + geom_point() + geom_smooth()
+
+df.1 %>%
+  filter(P < 1) %>%
+  summarise(meanp = mean(P)) 
+  #ggplot(aes(x = P)) + geom_histogram()
+
+df.2 %>%
+  filter(P < 1) %>%
+  ggplot(aes(x = MAF, y = P)) + geom_point() + geom_smooth()
+
+df.2 %>%
+  filter(P < 1) %>%
+  summarise(meanp = mean(P)) 
+  #ggplot(aes(x = P)) + geom_histogram()
+
+df.3 %>%
+  filter(P < 1) %>%
+  ggplot(aes(x = MAF, y = P)) + geom_point() + geom_smooth()
+
+df.3 %>%
+  filter(P < 1) %>%
+  summarise(meanp = mean(P)) 
+  #ggplot(aes(x = P)) + geom_histogram()
+```
+
+
+
+
